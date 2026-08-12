@@ -78,7 +78,7 @@ final class ClipboardStore {
     /// single file, so reloading and saving as two transactions would leave a
     /// window where each writes a different snapshot and the later write
     /// discards the other's clips. Re-reading inside the lock closes it.
-    private func mutate(_ body: () -> Void) {
+    private func mutate(_ body: @escaping () -> Void) {
         guard let url = fileURL else {
             body()
             return
@@ -86,10 +86,10 @@ final class ClipboardStore {
         coordinator.coordinate(writingItemAt: url, options: [], error: nil) { actualURL in
             if let data = try? Data(contentsOf: actualURL),
                let decoded = try? JSONDecoder().decode([Clip].self, from: data) {
-                clips = decoded
+                self.clips = decoded
             }
             body()
-            if let data = try? JSONEncoder().encode(clips) {
+            if let data = try? JSONEncoder().encode(self.clips) {
                 try? data.write(to: actualURL, options: .atomic)
             }
         }
@@ -146,7 +146,7 @@ final class ClipboardStore {
         coordinator.coordinate(readingItemAt: url, options: [], error: nil) { actualURL in
             guard let data = try? Data(contentsOf: actualURL),
                   let decoded = try? JSONDecoder().decode([Clip].self, from: data) else { return }
-            clips = decoded
+            self.clips = decoded
         }
     }
 
