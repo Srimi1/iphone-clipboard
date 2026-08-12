@@ -33,18 +33,38 @@ final class ClipboardStore {
     // MARK: - Capture
 
     /// Reads the general pasteboard only when its changeCount differs from the
-    /// last one we stored — reading `.string` triggers the iOS paste banner, so
+    /// last one we stored — reading `.string` triggers the iOS paste prompt, so
     /// we avoid doing it unless something actually changed.
+    ///
+    /// The change count is committed only once there is nothing left to capture
+    /// for that pasteboard generation. If the user denies the paste prompt, a
+    /// `userInitiated` call leaves it uncommitted so the clip can still be
+    /// captured later; polled calls always commit so the timer can't loop the
+    /// system alert.
+    ///
     /// Returns true if a new clip was captured.
     @discardableResult
-    func captureIfChanged() -> Bool {
+    func captureIfChanged(userInitiated: Bool = false) -> Bool {
         let pasteboard = UIPasteboard.general
+        let count = pasteboard.changeCount
         let lastCount = AppGroup.defaults.integer(forKey: AppGroup.Key.lastPasteboardChangeCount)
-        guard pasteboard.changeCount != lastCount else { return false }
-        AppGroup.defaults.set(pasteboard.changeCount, forKey: AppGroup.Key.lastPasteboardChangeCount)
+        guard count != lastCount else { return false }
 
-        guard pasteboard.hasStrings, let text = pasteboard.string,
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        func commit() {
+            AppGroup.defaults.set(count, forKey: AppGroup.Key.lastPasteboardChangeCount)
+        }
+
+        // hasStrings does not raise the paste prompt; .string does.
+        guard pasteboard.hasStrings else {
+            commit()
+            return false
+        }
+        guard let text = pasteboard.string else {
+            if !userInitiated { commit() }
+            return false
+        }
+        commit()
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return false
         }
         add(text)
@@ -68,18 +88,25 @@ final class ClipboardStore {
         save()
     }
 
+    // Every mutation reloads first: the app and the keyboard extension are
+    // separate processes over one file, so saving a stale in-memory snapshot
+    // would silently discard whatever the other process wrote.
+
     func togglePin(_ clip: Clip) {
+        load()
         guard let index = clips.firstIndex(where: { $0.id == clip.id }) else { return }
         clips[index].pinned.toggle()
         save()
     }
 
     func delete(_ clip: Clip) {
+        load()
         clips.removeAll { $0.id == clip.id }
         save()
     }
 
     func deleteAllUnpinned() {
+        load()
         clips.removeAll { !$0.pinned }
         save()
     }

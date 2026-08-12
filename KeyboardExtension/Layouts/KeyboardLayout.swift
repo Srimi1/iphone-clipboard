@@ -52,9 +52,19 @@ struct KeyboardLayout {
         ]
     }
 
-    /// Wraps a middle letter row with shift and backspace, Android style.
-    static func thirdRow(_ letters: [Key]) -> [Key] {
-        [Key(.shift, width: 1.5)] + letters + [Key(.backspace, width: 1.5)]
+    /// Wraps a middle letter row with a leading modifier and backspace, Android
+    /// style. The side keys widen so every third row totals 10 units and its
+    /// letters stay on the same column grid as the rows above (French's 6-letter
+    /// row would otherwise render ~15% wider).
+    ///
+    /// Caseless scripts pass a useful key instead of the inert shift.
+    static func thirdRow(_ letters: [Key],
+                         leading: KeyAction = .shift,
+                         leadingVariants: [String] = []) -> [Key] {
+        let side = max(1.5, (10 - CGFloat(letters.count)) / 2)
+        return [Key(leading, width: side, variants: leadingVariants)]
+            + letters
+            + [Key(.backspace, width: side)]
     }
 }
 

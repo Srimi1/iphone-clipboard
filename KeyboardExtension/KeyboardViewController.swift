@@ -29,13 +29,23 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         heightConstraint = constraint
         keyboardView.configure(language: language)
         toolbar.showLanguageChange(language)
+    }
+
+    override func viewWillLayoutSubviews() {
+        // needsInputModeSwitchKey isn't settled until the input view is in the
+        // window and can change while the keyboard is up, so re-read it every
+        // layout pass rather than latching one pre-connection value.
         toolbar.setNextKeyboardVisible(needsInputModeSwitchKey)
+        super.viewWillLayoutSubviews()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         keyboardView.configure(language: language)
         keyboardView.syncAutoShift()
+        // Always come back to the keys, never to a panel left open in a
+        // previous host app (whose contents would be stale).
+        setClipboardPanelVisible(false)
         insertPendingTranscriptionIfAny()
         pollClipboard()
         clipboardTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -194,12 +204,14 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
 
     // MARK: - Clipboard
 
-    private func pollClipboard() {
+    /// `userInitiated` marks the calls the user actually drove (opening the
+    /// panel), which may re-prompt for pasteboard access; the 2s timer must not.
+    private func pollClipboard(userInitiated: Bool = false) {
         guard hasFullAccess else {
             if !clipboardPanel.isHidden { clipboardPanel.reload(hasFullAccess: false) }
             return
         }
-        let captured = ClipboardStore.shared.captureIfChanged()
+        let captured = ClipboardStore.shared.captureIfChanged(userInitiated: userInitiated)
         if captured, !clipboardPanel.isHidden {
             clipboardPanel.reload(hasFullAccess: true)
         }
@@ -210,7 +222,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         keyboardView.isHidden = visible
         toolbar.setClipboardActive(visible)
         if visible {
-            pollClipboard()
+            pollClipboard(userInitiated: true)
             clipboardPanel.reload(hasFullAccess: hasFullAccess)
         }
     }
@@ -241,13 +253,15 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             do {
                 let corrected = try await ClaudeAPI.fixText(text, language: self.language)
                 await MainActor.run {
-                    // Replace exactly the span captured above, not whatever the
-                    // proxy holds after the network round trip.
+                    // Replace exactly the span captured above. If the user
+                    // typed during the round trip the span no longer matches
+                    // and the replacement is abandoned instead of corrupting
+                    // the document.
                     TextReplacer.replaceVisibleText(before: before, after: after,
                                                     with: corrected,
-                                                    in: self.textDocumentProxy) {
+                                                    in: self.textDocumentProxy) { applied in
                         self.toolbar.setAILoading(false)
-                        self.toolbar.showStatus("Fixed ✓")
+                        self.toolbar.showStatus(applied ? "Fixed ✓" : "Text changed — try again")
                         self.refreshSuggestions()
                     }
                 }

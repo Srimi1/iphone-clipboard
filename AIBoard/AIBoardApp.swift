@@ -17,7 +17,7 @@ struct AIBoardApp: App {
                     // becomes active, so history builds up even when the
                     // keyboard isn't open.
                     if phase == .active {
-                        ClipboardStore.shared.captureIfChanged()
+                        ClipboardStore.shared.captureIfChanged(userInitiated: true)
                     }
                 }
         }

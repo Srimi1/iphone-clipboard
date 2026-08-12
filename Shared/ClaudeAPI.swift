@@ -33,7 +33,10 @@ enum ClaudeAPI {
 
         let body: [String: Any] = [
             "model": model,
-            "max_tokens": 1024,
+            "max_tokens": 2048,
+            // Grammar correction doesn't benefit from thinking, and leaving it
+            // on adds latency and eats into max_tokens on an interactive path.
+            "thinking": ["type": "disabled"],
             "system": system,
             "messages": [["role": "user", "content": text]],
         ]
@@ -60,10 +63,11 @@ enum ClaudeAPI {
             throw APIError.badResponse("Request failed (HTTP \(http.statusCode)).")
         }
 
+        // Pick the first *text* block: the content array can lead with other
+        // block types (e.g. thinking), which carry no "text" field.
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let content = json["content"] as? [[String: Any]],
-              let first = content.first,
-              let corrected = first["text"] as? String,
+              let corrected = content.first(where: { $0["type"] as? String == "text" })?["text"] as? String,
               !corrected.isEmpty else {
             throw APIError.emptyResult
         }

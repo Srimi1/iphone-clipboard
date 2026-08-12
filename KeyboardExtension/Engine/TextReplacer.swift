@@ -20,17 +20,34 @@ enum TextReplacer {
     ///
     /// The caller passes the context it captured when the operation started
     /// (rather than this function re-reading the proxy) so the deleted span is
-    /// exactly the span that was corrected.
+    /// exactly the span that was corrected. Because a network round trip can
+    /// sit between the capture and this call, the span is re-validated against
+    /// the live document first: if the user typed meanwhile, the replacement is
+    /// abandoned rather than deleting the wrong number of characters.
     ///
     /// Steps: move the cursor to the end of the visible text, then delete
     /// backwards over everything, then insert the replacement. Deletes are
     /// chunked with short async delays because host apps drop rapid-fire
     /// `deleteBackward` calls.
+    ///
+    /// `completion` reports whether the replacement was actually applied.
     static func replaceVisibleText(before: String,
                                    after: String,
                                    with newText: String,
                                    in proxy: UITextDocumentProxy,
-                                   completion: @escaping () -> Void) {
+                                   completion: @escaping (Bool) -> Void) {
+        // Only one delete chain may ever be in flight; two interleaved chains
+        // scramble the document and clear each other's gate.
+        guard !isReplacing else {
+            completion(false)
+            return
+        }
+        // The document must still hold the exact span we captured.
+        guard (proxy.documentContextBeforeInput ?? "") == before,
+              (proxy.documentContextAfterInput ?? "") == after else {
+            completion(false)
+            return
+        }
         isReplacing = true
 
         // 1. Jump to the end of the visible text. The proxy counts offsets in
@@ -42,13 +59,14 @@ enum TextReplacer {
         deleteBackwardChunked(count: total, proxy: proxy) {
             proxy.insertText(newText)
             isReplacing = false
-            completion()
+            completion(true)
         }
     }
 
     private static func deleteBackwardChunked(count: Int,
                                               proxy: UITextDocumentProxy,
                                               chunkSize: Int = 20,
+                                              deleted: Int = 0,
                                               completion: @escaping () -> Void) {
         guard count > 0 else {
             completion()
@@ -56,9 +74,13 @@ enum TextReplacer {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             // Stop early once the visible context is exhausted so dropped
-            // deletes can't eat text beyond the corrected span.
+            // deletes can't eat text beyond the corrected span. Only after at
+            // least one delete has landed: an empty context on the first pass
+            // just means the host hasn't synced the cursor move yet, and
+            // bailing there would insert the correction without removing the
+            // original.
             let remainingContext = proxy.documentContextBeforeInput ?? ""
-            if remainingContext.isEmpty {
+            if deleted > 0 && remainingContext.isEmpty {
                 completion()
                 return
             }
@@ -67,7 +89,8 @@ enum TextReplacer {
                 proxy.deleteBackward()
             }
             deleteBackwardChunked(count: count - chunk, proxy: proxy,
-                                  chunkSize: chunkSize, completion: completion)
+                                  chunkSize: chunkSize, deleted: deleted + chunk,
+                                  completion: completion)
         }
     }
 

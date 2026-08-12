@@ -30,6 +30,9 @@ struct SettingsView: View {
                         .disabled(apiKey.isEmpty || testState == .testing)
                         testIndicator
                     }
+                    // Without this, the Form row is a single hit target and
+                    // tapping either button fires both.
+                    .buttonStyle(.borderless)
                 } header: {
                     Text("Claude API Key")
                 } footer: {

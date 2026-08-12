@@ -13,7 +13,7 @@ struct ClipboardHistoryView: View {
                         ForEach(clips) { clip in
                             Button {
                                 UIPasteboard.general.string = clip.text
-                                ClipboardStore.shared.captureIfChanged()
+                                ClipboardStore.shared.captureIfChanged(userInitiated: true)
                                 reload()
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -60,7 +60,7 @@ struct ClipboardHistoryView: View {
                 }
             }
             .onAppear {
-                ClipboardStore.shared.captureIfChanged()
+                ClipboardStore.shared.captureIfChanged(userInitiated: true)
                 reload()
             }
         }

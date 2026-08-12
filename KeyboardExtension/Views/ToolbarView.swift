@@ -40,8 +40,13 @@ final class ToolbarView: UIView {
             aiButton.widthAnchor.constraint(equalToConstant: 44),
             micButton.widthAnchor.constraint(equalToConstant: 44),
             globeButton.widthAnchor.constraint(equalToConstant: 44),
-            nextKeyboardButton.widthAnchor.constraint(equalToConstant: 44),
         ])
+        // Sub-required so UIStackView's own required hiding constraint
+        // (width == 0) can collapse this button without a conflict — it is the
+        // one toolbar button that gets hidden.
+        let nextKeyboardWidth = nextKeyboardButton.widthAnchor.constraint(equalToConstant: 44)
+        nextKeyboardWidth.priority = .init(999)
+        nextKeyboardWidth.isActive = true
         nextKeyboardButton.isHidden = true
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
