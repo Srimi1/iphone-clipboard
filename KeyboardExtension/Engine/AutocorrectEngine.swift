@@ -10,7 +10,7 @@ final class AutocorrectEngine {
         guard language.supportsSpellCheck else { return [] }
         guard let word = currentWord(in: context), word.count >= 2 else { return [] }
 
-        let lang = language.rawValue
+        let lang = language.localeIdentifier
         let nsWord = word as NSString
         let range = NSRange(location: 0, length: nsWord.length)
 

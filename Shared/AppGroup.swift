@@ -6,7 +6,13 @@ enum AppGroup {
     static let identifier = "group.com.yourteam.aiboard"
 
     static var defaults: UserDefaults {
-        UserDefaults(suiteName: identifier) ?? .standard
+        guard let suite = UserDefaults(suiteName: identifier) else {
+            // Misconfigured App Group entitlement — fail loudly in development
+            // instead of silently writing to the wrong defaults domain.
+            assertionFailure("App Group \(identifier) is not configured; check the entitlements on both targets.")
+            return .standard
+        }
+        return suite
     }
 
     static var containerURL: URL? {
@@ -20,7 +26,6 @@ enum AppGroup {
         static let currentLanguage = "currentLanguage"
         static let enabledLanguages = "enabledLanguages"
         static let lastPasteboardChangeCount = "lastPasteboardChangeCount"
-        static let apiKeyFallback = "claudeAPIKeyFallback"
     }
 
     // MARK: - Pending transcription round-trip

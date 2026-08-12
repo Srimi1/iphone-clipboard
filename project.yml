@@ -38,6 +38,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.yourteam.aiboard
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.yourteam.aiboard.shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yourteam.aiboard
@@ -70,6 +72,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.yourteam.aiboard
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.yourteam.aiboard.shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yourteam.aiboard.keyboard

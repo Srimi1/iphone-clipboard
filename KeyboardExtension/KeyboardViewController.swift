@@ -228,7 +228,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         Task { [weak self] in
             guard let self else { return }
             do {
-                let corrected = try await ClaudeAPI.fixText(before + after, language: self.language)
+                let corrected = try await ClaudeAPI.fixText(text, language: self.language)
                 await MainActor.run {
                     TextReplacer.replaceVisibleText(with: corrected, in: self.textDocumentProxy) {
                         self.toolbar.setAILoading(false)

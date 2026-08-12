@@ -1,26 +1,26 @@
 import Foundation
 import Security
 
-/// Stores the Claude API key. Uses the keychain when available; the keyboard
-/// extension can read it because both targets share the App Group-backed
-/// fallback in shared UserDefaults if keychain sharing isn't configured.
-///
-/// Note: for keychain access from the extension you'd normally add a shared
-/// keychain access group. To keep setup simple this helper writes to both the
-/// local keychain and the App Group defaults, and reads keychain-first.
+/// Stores the Claude API key in the keychain. Both targets list the shared
+/// keychain access group `$(AppIdentifierPrefix)com.yourteam.aiboard.shared`
+/// FIRST in their entitlements, which makes it the default group for keychain
+/// writes — so the app and the keyboard extension read the same item without
+/// specifying `kSecAttrAccessGroup`, and the key never touches UserDefaults
+/// or any other plaintext store.
 enum KeychainHelper {
     private static let service = "com.yourteam.aiboard"
     private static let account = "claude-api-key"
 
-    static func saveAPIKey(_ key: String) {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        AppGroup.defaults.set(trimmed, forKey: AppGroup.Key.apiKeyFallback)
-
-        let query: [String: Any] = [
+    private static var query: [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
+    }
+
+    static func saveAPIKey(_ key: String) {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         SecItemDelete(query as CFDictionary)
         guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else { return }
         var attributes = query
@@ -30,21 +30,17 @@ enum KeychainHelper {
     }
 
     static func loadAPIKey() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
+        var itemQuery = query
+        itemQuery[kSecReturnData as String] = true
+        itemQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+
         var result: AnyObject?
-        if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-           let data = result as? Data,
-           let key = String(data: data, encoding: .utf8),
-           !key.isEmpty {
-            return key
+        guard SecItemCopyMatching(itemQuery as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data,
+              let key = String(data: data, encoding: .utf8),
+              !key.isEmpty else {
+            return nil
         }
-        let fallback = AppGroup.defaults.string(forKey: AppGroup.Key.apiKeyFallback)
-        return (fallback?.isEmpty == false) ? fallback : nil
+        return key
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// What a key does when tapped.
 enum KeyAction: Equatable {
