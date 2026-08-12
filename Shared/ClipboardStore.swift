@@ -22,7 +22,7 @@ final class ClipboardStore {
 
     private let maxUnpinned = 50
     private let fileURL: URL? = AppGroup.containerURL?.appendingPathComponent("clips.json")
-    private let queue = DispatchQueue(label: "com.yourteam.aiboard.clipboardstore")
+    private let coordinator = NSFileCoordinator()
 
     private(set) var clips: [Clip] = []
 
@@ -56,7 +56,11 @@ final class ClipboardStore {
     func add(_ text: String) {
         load() // pick up writes from the other process
         if let existing = clips.firstIndex(where: { $0.text == text }) {
-            clips[existing].date = Date()
+            // Move a refreshed duplicate to the front so storage order stays
+            // newest-first and trim() keeps the most recent clips.
+            var clip = clips.remove(at: existing)
+            clip.date = Date()
+            clips.insert(clip, at: 0)
         } else {
             clips.insert(Clip(text: text), at: 0)
         }
@@ -91,8 +95,12 @@ final class ClipboardStore {
     // MARK: - Persistence
 
     func load() {
-        guard let url = fileURL, let data = try? Data(contentsOf: url) else { return }
-        if let decoded = try? JSONDecoder().decode([Clip].self, from: data) {
+        guard let url = fileURL else { return }
+        // NSFileCoordinator serializes access across the app and the keyboard
+        // extension, which run as separate processes on the same file.
+        coordinator.coordinate(readingItemAt: url, options: [], error: nil) { actualURL in
+            guard let data = try? Data(contentsOf: actualURL),
+                  let decoded = try? JSONDecoder().decode([Clip].self, from: data) else { return }
             clips = decoded
         }
     }
@@ -107,12 +115,11 @@ final class ClipboardStore {
     }
 
     private func save() {
-        guard let url = fileURL else { return }
-        let snapshot = clips
-        queue.async {
-            if let data = try? JSONEncoder().encode(snapshot) {
-                try? data.write(to: url, options: .atomic)
-            }
+        guard let url = fileURL, let data = try? JSONEncoder().encode(clips) else { return }
+        // Synchronous coordinated write: no stale snapshot can be flushed
+        // after a later mutation, and other-process readers wait for us.
+        coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: nil) { actualURL in
+            try? data.write(to: actualURL, options: .atomic)
         }
     }
 }

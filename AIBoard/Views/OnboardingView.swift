@@ -13,7 +13,7 @@ struct OnboardingView: View {
                             UIApplication.shared.open(url)
                         }
                     } label: {
-                        Label("Open Settings", systemImage: "arrow.up.forward.app")
+                        Label("Open AIBoard's app settings (has a Keyboards toggle)", systemImage: "arrow.up.forward.app")
                     }
                 }
 

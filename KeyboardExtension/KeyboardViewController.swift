@@ -20,8 +20,16 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         super.viewDidLoad()
         view.backgroundColor = KeyboardTheme.background
         buildViewHierarchy()
+        // Install the height constraint up front — updateViewConstraints can
+        // run before the view has a size, and UIKit doesn't guarantee another
+        // pass, so only the constant is adjusted later.
+        let constraint = view.heightAnchor.constraint(equalToConstant: 288)
+        constraint.priority = .init(999)
+        constraint.isActive = true
+        heightConstraint = constraint
         keyboardView.configure(language: language)
-        toolbar.setLanguageBadge(language)
+        toolbar.showLanguageChange(language)
+        toolbar.setNextKeyboardVisible(needsInputModeSwitchKey)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -43,16 +51,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
 
     override func updateViewConstraints() {
         super.updateViewConstraints()
-        let isLandscape = view.bounds.width > 500
-        let height: CGFloat = isLandscape ? 220 : 288
-        if let constraint = heightConstraint {
-            constraint.constant = height
-        } else if view.bounds.height > 0 {
-            let constraint = view.heightAnchor.constraint(equalToConstant: height)
-            constraint.priority = .init(999)
-            constraint.isActive = true
-            heightConstraint = constraint
-        }
+        // Compact height only for genuinely landscape phones (compact height
+        // class); iPads and portrait phones keep the full height.
+        let isLandscapePhone = traitCollection.verticalSizeClass == .compact
+        heightConstraint?.constant = isLandscapePhone ? 220 : 288
     }
 
     private func buildViewHierarchy() {
@@ -111,26 +113,32 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             let next = LanguageManager.shared.cycle()
             self.keyboardView.configure(language: next)
             self.keyboardView.syncAutoShift()
-            self.toolbar.setLanguageBadge(next)
+            self.toolbar.showLanguageChange(next)
             self.refreshSuggestions()
         }
         toolbar.onMicTapped = { [weak self] in
             self?.openContainerApp(path: "dictate")
+            self?.toolbar.showStatus("If AIBoard didn't open, open it manually")
         }
         toolbar.onFixWithAITapped = { [weak self] in
             self?.fixWithAI()
+        }
+        toolbar.onNextKeyboardTapped = { [weak self] in
+            self?.advanceToNextInputMode()
         }
     }
 
     // MARK: - KeyboardViewDelegate
 
     func keyboardView(_ view: KeyboardView, didProduceText text: String) {
+        guard !TextReplacer.isReplacing else { return }
         textDocumentProxy.insertText(text)
         lastCharacterWasSpace = false
         refreshSuggestions()
     }
 
     func keyboardViewDidTapBackspace(_ view: KeyboardView) {
+        guard !TextReplacer.isReplacing else { return }
         textDocumentProxy.deleteBackward()
         lastCharacterWasSpace = false
         keyboardView.syncAutoShift()
@@ -138,6 +146,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     }
 
     func keyboardViewDidTapReturn(_ view: KeyboardView) {
+        guard !TextReplacer.isReplacing else { return }
         textDocumentProxy.insertText("\n")
         lastCharacterWasSpace = false
         keyboardView.syncAutoShift()
@@ -145,6 +154,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     }
 
     func keyboardViewDidTapSpace(_ view: KeyboardView) {
+        guard !TextReplacer.isReplacing else { return }
         let proxy = textDocumentProxy
         // Double-space → ". "
         if lastCharacterWasSpace,
@@ -208,6 +218,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
     // MARK: - Fix with AI
 
     private func fixWithAI() {
+        guard !TextReplacer.isReplacing else { return }
         guard hasFullAccess else {
             toolbar.showStatus("Enable Full Access for AI")
             return
@@ -230,7 +241,11 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             do {
                 let corrected = try await ClaudeAPI.fixText(text, language: self.language)
                 await MainActor.run {
-                    TextReplacer.replaceVisibleText(with: corrected, in: self.textDocumentProxy) {
+                    // Replace exactly the span captured above, not whatever the
+                    // proxy holds after the network round trip.
+                    TextReplacer.replaceVisibleText(before: before, after: after,
+                                                    with: corrected,
+                                                    in: self.textDocumentProxy) {
                         self.toolbar.setAILoading(false)
                         self.toolbar.showStatus("Fixed ✓")
                         self.refreshSuggestions()
@@ -239,7 +254,13 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
             } catch {
                 await MainActor.run {
                     self.toolbar.setAILoading(false)
-                    self.toolbar.showStatus(error.localizedDescription)
+                    // Our own APIError messages are short and safe to show;
+                    // anything else (transport errors) gets a fixed message.
+                    if let apiError = error as? ClaudeAPI.APIError {
+                        self.toolbar.showStatus(apiError.errorDescription ?? "AI request failed")
+                    } else {
+                        self.toolbar.showStatus("AI request failed — check your connection")
+                    }
                 }
             }
         }
@@ -254,8 +275,11 @@ final class KeyboardViewController: UIInputViewController, KeyboardViewDelegate 
         }
     }
 
-    /// Opens the companion app via its URL scheme. `UIApplication.shared.open`
-    /// isn't available in extensions, so walk the responder chain.
+    /// Best-effort launch of the companion app via its URL scheme.
+    /// `UIApplication.shared.open` isn't available in extensions; the
+    /// responder-chain workaround below works on most iOS versions but is not
+    /// guaranteed (and is restricted on recent releases), so callers always
+    /// pair this with a "open AIBoard manually" status hint.
     private func openContainerApp(path: String) {
         guard let url = URL(string: "aiboard://\(path)") else { return }
         var responder: UIResponder? = self

@@ -96,7 +96,9 @@ final class SpeechRecognizer: ObservableObject {
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine = nil
-        task?.cancel()
+        // finish() lets the task deliver the final result for audio already
+        // accepted; cancel() would drop it.
+        task?.finish()
         task = nil
         request = nil
         isRecording = false

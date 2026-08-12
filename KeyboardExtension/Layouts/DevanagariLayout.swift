@@ -5,8 +5,9 @@ import Foundation
 /// related conjunct forms; the halant (्) lives on long-press too.
 enum DevanagariLayout {
 
-    /// Common matras offered on consonant long-press.
-    private static let matras = ["ा", "ि", "ी", "ु", "ू", "े", "ै", "ो", "ौ", "्", "ं", "ः"]
+    /// Most frequent matras offered on consonant long-press, capped so the
+    /// popup (base + variants) fits the narrowest supported iPhone.
+    private static let matras = ["ा", "ि", "ी", "ु", "ू", "े", "ो", "्"]
 
     private static func consonant(_ c: String) -> Key {
         .char(c, variants: matras.map { c + $0 })
@@ -49,10 +50,4 @@ enum DevanagariLayout {
         KeyboardLayout.bottomRow(),
     ])
 
-    /// Devanagari digits page (swapped in when symbols are shown in Hindi).
-    static let digits = ["१", "२", "३", "४", "५", "६", "७", "८", "९", "०"]
-
-    static func layout(for language: KeyboardLanguage) -> KeyboardLayout? {
-        language == .hindi ? layout : nil
-    }
 }

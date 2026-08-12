@@ -16,11 +16,13 @@ struct SettingsView: View {
                     SecureField("sk-ant-…", text: $apiKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .disabled(testState == .testing)
                     HStack {
                         Button("Save") {
                             KeychainHelper.saveAPIKey(apiKey)
                             testState = .idle
                         }
+                        .disabled(testState == .testing)
                         Spacer()
                         Button("Test") {
                             testKey()

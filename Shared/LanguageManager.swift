@@ -60,6 +60,10 @@ final class LanguageManager {
         set {
             let value = newValue.isEmpty ? [KeyboardLanguage.english] : newValue
             AppGroup.defaults.set(value.map(\.rawValue), forKey: AppGroup.Key.enabledLanguages)
+            // Never leave the keyboard on a language that was just disabled.
+            if !value.contains(current) {
+                current = value[0]
+            }
         }
     }
 

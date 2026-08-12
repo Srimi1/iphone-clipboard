@@ -7,8 +7,12 @@ final class KeyPopupView: UIView {
     private(set) var selectedIndex: Int = 0
     private(set) var options: [String] = []
 
-    private let itemWidth: CGFloat = 38
+    private let preferredItemWidth: CGFloat = 38
+    private let minimumItemWidth: CGFloat = 24
     private let itemHeight: CGFloat = 46
+    /// Actual per-item width for the current presentation, shrunk when the
+    /// option list would otherwise overflow the container.
+    private var itemWidth: CGFloat = 38
 
     init() {
         super.init(frame: .zero)
@@ -40,10 +44,15 @@ final class KeyPopupView: UIView {
             return label
         }
 
-        let width = itemWidth * CGFloat(options.count) + 8
+        // Fit the bubble inside the container: shrink items down to a minimum
+        // tappable width before allowing any overflow.
+        let available = container.bounds.width - 16
+        itemWidth = max(minimumItemWidth,
+                        min(preferredItemWidth, (available - 8) / CGFloat(max(1, options.count))))
+        let width = min(itemWidth * CGFloat(options.count) + 8, available)
         let keyFrame = key.convert(key.bounds, to: container)
         var x = keyFrame.midX - width / 2
-        x = max(4, min(x, container.bounds.width - width - 4))
+        x = max(4, min(x, max(4, container.bounds.width - width - 4)))
         frame = CGRect(x: x, y: keyFrame.minY - itemHeight - 8, width: width, height: itemHeight)
 
         for (i, label) in labels.enumerated() {

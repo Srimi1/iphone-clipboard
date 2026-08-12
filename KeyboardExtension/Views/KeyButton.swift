@@ -41,6 +41,10 @@ final class KeyButton: UIButton {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+    deinit {
+        deleteTimer?.invalidate()
+    }
+
     private var isCharacterKey: Bool {
         if case .character = key.action { return true }
         return false
@@ -79,15 +83,24 @@ final class KeyButton: UIButton {
     // MARK: - Backspace auto-repeat
 
     private func startRepeatingDelete() {
-        deleteTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+        // .common mode keeps the timers firing while UIKit tracks the touch
+        // (touch tracking switches the run loop out of .default mode).
+        let initialDelay = Timer(timeInterval: 0.5, repeats: false) { [weak self] _ in
             guard let self else { return }
             self.isRepeating = true
             self.delegate?.keyButtonBeganRepeatingDelete(self)
-            self.deleteTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                guard let self else { return }
+            let repeater = Timer(timeInterval: 0.1, repeats: true) { [weak self] timer in
+                guard let self else {
+                    timer.invalidate()
+                    return
+                }
                 self.delegate?.keyButtonTapped(self)
             }
+            self.deleteTimer = repeater
+            RunLoop.main.add(repeater, forMode: .common)
         }
+        deleteTimer = initialDelay
+        RunLoop.main.add(initialDelay, forMode: .common)
     }
 
     private func stopRepeatingDelete() {

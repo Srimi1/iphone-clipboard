@@ -110,10 +110,12 @@ final class KeyboardView: UIView, KeyButtonDelegate {
             rowStack.distribution = .fill
 
             var previousUnitKey: KeyButton?
+            var rowButtons: [KeyButton] = []
             for key in row {
                 let button = KeyButton(key: key)
                 button.delegate = self
                 keyButtons.append(button)
+                rowButtons.append(button)
                 rowStack.addArrangedSubview(button)
 
                 if key.widthMultiplier == 1.0 {
@@ -125,11 +127,10 @@ final class KeyboardView: UIView, KeyButtonDelegate {
             }
             // Non-unit keys sized relative to the first unit key in the row.
             if let unit = row.firstIndex(where: { $0.widthMultiplier == 1.0 }) {
-                let unitButton = rowStack.arrangedSubviews[unit] as! KeyButton
+                let unitButton = rowButtons[unit]
                 for (i, key) in row.enumerated() where key.widthMultiplier != 1.0 {
-                    let button = rowStack.arrangedSubviews[i] as! KeyButton
-                    button.widthAnchor.constraint(equalTo: unitButton.widthAnchor,
-                                                  multiplier: key.widthMultiplier).isActive = true
+                    rowButtons[i].widthAnchor.constraint(equalTo: unitButton.widthAnchor,
+                                                         multiplier: key.widthMultiplier).isActive = true
                 }
             }
 
@@ -147,6 +148,19 @@ final class KeyboardView: UIView, KeyButtonDelegate {
             if row.count >= 10 || row.contains(where: { $0.widthMultiplier > 1.0 }) {
                 rowStack.leadingAnchor.constraint(equalTo: container.leadingAnchor).isActive = true
                 rowStack.trailingAnchor.constraint(equalTo: container.trailingAnchor).isActive = true
+            } else {
+                // Size short centered rows (e.g. the 9-key home row) from the
+                // same unit key width as a 10-key row so the columns align:
+                // width = units * unit + (count-1) * spacing, where a 10-key
+                // row satisfies container = 10 * unit + 9 * spacing.
+                let units = row.reduce(CGFloat(0)) { $0 + $1.widthMultiplier }
+                let gaps = CGFloat(max(0, row.count - 1)) * rowStack.spacing
+                let referenceGaps = 9 * rowStack.spacing
+                rowStack.widthAnchor.constraint(
+                    equalTo: container.widthAnchor,
+                    multiplier: units / 10,
+                    constant: gaps - referenceGaps * units / 10
+                ).isActive = true
             }
             rowsStack.addArrangedSubview(container)
         }
@@ -249,6 +263,7 @@ final class KeyboardView: UIView, KeyButtonDelegate {
             delegate?.keyboardViewDidTapReturn(self)
         case .switchToSymbols:
             page = .symbols
+            shiftState = .off
             rebuild()
         case .switchToLetters:
             page = .letters
@@ -256,6 +271,7 @@ final class KeyboardView: UIView, KeyButtonDelegate {
             syncAutoShift()
         case .switchToSymbolsAlt:
             page = .symbolsAlt
+            shiftState = .off
             rebuild()
         case .globe:
             delegate?.keyboardViewDidTapGlobe(self)

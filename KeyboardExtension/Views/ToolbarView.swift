@@ -7,11 +7,13 @@ final class ToolbarView: UIView {
     var onFixWithAITapped: (() -> Void)?
     var onMicTapped: (() -> Void)?
     var onGlobeTapped: (() -> Void)?
+    var onNextKeyboardTapped: (() -> Void)?
 
-    private let clipboardButton = ToolbarView.makeButton(symbol: "doc.on.clipboard")
-    private let aiButton = ToolbarView.makeButton(symbol: "wand.and.stars")
-    private let micButton = ToolbarView.makeButton(symbol: "mic")
-    private let globeButton = ToolbarView.makeButton(symbol: "globe")
+    private let clipboardButton = ToolbarView.makeButton(symbol: "doc.on.clipboard", label: "Clipboard history")
+    private let aiButton = ToolbarView.makeButton(symbol: "wand.and.stars", label: "Fix text with AI")
+    private let micButton = ToolbarView.makeButton(symbol: "mic", label: "Dictate")
+    private let globeButton = ToolbarView.makeButton(symbol: "globe", label: "Change language")
+    private let nextKeyboardButton = ToolbarView.makeButton(symbol: "keyboard.chevron.compact.down", label: "Next keyboard")
     private let statusLabel = UILabel()
     private let spinner = UIActivityIndicatorView(style: .medium)
 
@@ -24,7 +26,7 @@ final class ToolbarView: UIView {
         statusLabel.adjustsFontSizeToFitWidth = true
         statusLabel.minimumScaleFactor = 0.7
 
-        let stack = UIStackView(arrangedSubviews: [clipboardButton, aiButton, statusLabel, spinner, micButton, globeButton])
+        let stack = UIStackView(arrangedSubviews: [nextKeyboardButton, clipboardButton, aiButton, statusLabel, spinner, micButton, globeButton])
         stack.axis = .horizontal
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -38,21 +40,25 @@ final class ToolbarView: UIView {
             aiButton.widthAnchor.constraint(equalToConstant: 44),
             micButton.widthAnchor.constraint(equalToConstant: 44),
             globeButton.widthAnchor.constraint(equalToConstant: 44),
+            nextKeyboardButton.widthAnchor.constraint(equalToConstant: 44),
         ])
+        nextKeyboardButton.isHidden = true
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         clipboardButton.addAction(UIAction { [weak self] _ in self?.onClipboardTapped?() }, for: .touchUpInside)
         aiButton.addAction(UIAction { [weak self] _ in self?.onFixWithAITapped?() }, for: .touchUpInside)
         micButton.addAction(UIAction { [weak self] _ in self?.onMicTapped?() }, for: .touchUpInside)
         globeButton.addAction(UIAction { [weak self] _ in self?.onGlobeTapped?() }, for: .touchUpInside)
+        nextKeyboardButton.addAction(UIAction { [weak self] _ in self?.onNextKeyboardTapped?() }, for: .touchUpInside)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    private static func makeButton(symbol: String) -> UIButton {
+    private static func makeButton(symbol: String, label: String) -> UIButton {
         let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: symbol), for: .normal)
         button.tintColor = KeyboardTheme.secondaryText
+        button.accessibilityLabel = label
         return button
     }
 
@@ -78,8 +84,16 @@ final class ToolbarView: UIView {
         }
     }
 
-    func setLanguageBadge(_ language: KeyboardLanguage) {
+    /// Transient confirmation after a language switch; the spacebar shows the
+    /// persistent language name.
+    func showLanguageChange(_ language: KeyboardLanguage) {
         showStatus(language.displayName)
+    }
+
+    /// Shows the system keyboard-switch key when the host requires one
+    /// (`needsInputModeSwitchKey`).
+    func setNextKeyboardVisible(_ visible: Bool) {
+        nextKeyboardButton.isHidden = !visible
     }
 
     func setClipboardActive(_ active: Bool) {

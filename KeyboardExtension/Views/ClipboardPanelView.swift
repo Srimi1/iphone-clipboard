@@ -1,7 +1,7 @@
 import UIKit
 
 /// Clipboard history panel that overlays the key area. Tap a clip to insert
-/// it; long-press for pin/delete.
+/// it; swipe a row for pin/delete.
 final class ClipboardPanelView: UIView, UITableViewDataSource, UITableViewDelegate {
     var onClipSelected: ((Clip) -> Void)?
 
@@ -53,6 +53,9 @@ final class ClipboardPanelView: UIView, UITableViewDataSource, UITableViewDelega
             emptyLabel.text = "No clips yet.\nCopy something and it will appear here."
         }
         emptyLabel.isHidden = !clips.isEmpty && hasFullAccess
+        // Without Full Access the message replaces the list entirely —
+        // otherwise stale persisted clips render behind the label.
+        tableView.isHidden = !hasFullAccess
         tableView.reloadData()
     }
 
@@ -99,6 +102,9 @@ final class ClipboardPanelView: UIView, UITableViewDataSource, UITableViewDelega
             done(true)
         }
         pin.backgroundColor = KeyboardTheme.accent
-        return UISwipeActionsConfiguration(actions: [delete, pin])
+        let configuration = UISwipeActionsConfiguration(actions: [delete, pin])
+        // A full swipe would delete with no confirmation and no undo.
+        configuration.performsFirstActionWithFullSwipe = false
+        return configuration
     }
 }

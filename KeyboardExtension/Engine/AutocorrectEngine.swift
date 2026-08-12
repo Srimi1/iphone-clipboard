@@ -25,9 +25,9 @@ final class AutocorrectEngine {
         let misspelled = checker.rangeOfMisspelledWord(in: word, range: range, startingAt: 0, wrap: false, language: lang)
         if misspelled.location != NSNotFound,
            let guesses = checker.guesses(forWordRange: range, in: word, language: lang) {
-            for guess in guesses where !results.contains(guess) {
-                results.insert(guess, at: 0)
-            }
+            // Corrections outrank completions; keep the checker's ranking.
+            let ranked = guesses.filter { !results.contains($0) }
+            results.insert(contentsOf: ranked, at: 0)
         }
 
         // Preserve the user's capitalization for suggestions.
