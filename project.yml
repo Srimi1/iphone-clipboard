@@ -1,0 +1,79 @@
+name: AIBoard
+options:
+  bundleIdPrefix: com.yourteam
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  AIBoard:
+    type: application
+    platform: iOS
+    sources:
+      - AIBoard
+      - Shared
+    info:
+      path: AIBoard/Info.plist
+      properties:
+        CFBundleDisplayName: AIBoard
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSMicrophoneUsageDescription: "AIBoard uses the microphone for speech-to-text dictation."
+        NSSpeechRecognitionUsageDescription: "AIBoard transcribes your speech so the keyboard can insert it as text."
+        CFBundleURLTypes:
+          - CFBundleURLName: com.yourteam.aiboard
+            CFBundleURLSchemes:
+              - aiboard
+    entitlements:
+      path: AIBoard/AIBoard.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.yourteam.aiboard
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.yourteam.aiboard.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourteam.aiboard
+    dependencies:
+      - target: KeyboardExtension
+        embed: true
+
+  KeyboardExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - KeyboardExtension
+      - Shared
+    info:
+      path: KeyboardExtension/Info.plist
+      properties:
+        CFBundleDisplayName: AIBoard
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+    entitlements:
+      path: KeyboardExtension/KeyboardExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.yourteam.aiboard
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.yourteam.aiboard.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourteam.aiboard.keyboard
